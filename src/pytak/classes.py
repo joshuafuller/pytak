@@ -54,11 +54,9 @@ class Worker:
 
     def __init__(
         self,
-        queue: Union[asyncio.Queue, mp.Queue],
         config: Union[None, SectionProxy, dict] = None,
     ) -> None:
         """Initialize a Worker instance."""
-        self.queue: Union[asyncio.Queue, mp.Queue] = queue
         if config:
             self.config = config
         else:
@@ -101,12 +99,6 @@ class Worker:
         """Handle data (placeholder method, please override)."""
         pass
 
-    async def run_once(self) -> None:
-        """Reads Data from Queue & passes data to next Handler."""
-        data = await self.queue.get()
-        await self.handle_data(data)
-        await self.fts_compat()
-
     async def run(self, _=-1) -> None:
         """Run this Thread - calls run_once() in a loop."""
         self._logger.info("Running: %s", self.__class__.__name__)
@@ -126,12 +118,11 @@ class TXWorker(Worker):
 
     def __init__(
         self,
-        queue: Union[asyncio.Queue, mp.Queue],
         config: Union[None, SectionProxy, dict],
         writer: asyncio.Protocol,
     ) -> None:
         """Initialize a TXWorker instance."""
-        super().__init__(queue, config)
+        super().__init__(config)
         self.writer: asyncio.Protocol = writer
 
     async def handle_data(self, data: bytes) -> None:
@@ -187,12 +178,11 @@ class RXWorker(Worker):
 
     def __init__(
         self,
-        queue: Union[asyncio.Queue, mp.Queue],
         config: Union[None, SectionProxy, dict],
         reader: asyncio.Protocol,
     ) -> None:
         """Initialize a RXWorker instance."""
-        super().__init__(queue, config)
+        super().__init__(config)
         self.reader: asyncio.Protocol = reader
         self.reader_queue = None
 
@@ -233,59 +223,6 @@ class RXWorker(Worker):
         while True:
             await self.run_once()
             await asyncio.sleep(0)  # make sure other tasks have a chance to run
-
-
-class QueueWorker(Worker):
-    """Read non-CoT Messages from an async network client.
-
-    (`asyncio.Protocol` or similar async network client)
-    Serializes it as COT, and puts it onto an `asyncio.Queue`.
-
-    Implementations should handle serializing messages as COT Events, and
-    putting them onto the `event_queue`.
-
-    The `event_queue` is handled by the `pytak.EventWorker` Class.
-
-    pytak([asyncio.Protocol]->[pytak.MessageWorker]->[asyncio.Queue])
-    """
-
-    def __init__(
-        self,
-        queue: Union[asyncio.Queue, mp.Queue],
-        config: Union[None, SectionProxy, dict],
-    ) -> None:
-        super().__init__(queue, config)
-        self._logger.info("Using COT_URL='%s'", self.config.get("COT_URL"))
-
-    @abc.abstractmethod
-    async def handle_data(self, data: bytes) -> None:
-        """Handle data (placeholder method, please override)."""
-        pass
-
-    async def put_queue(
-        self, data: bytes, queue_arg: Union[asyncio.Queue, mp.Queue, None] = None
-    ) -> None:
-        """Put Data onto the Queue."""
-        _queue = queue_arg or self.queue
-        if _queue is None:
-            self._logger.warning("Queue is None, skipping put_queue operation.")
-            return
-
-        self._logger.debug("Queue size=%s", _queue.qsize())
-        if isinstance(_queue, asyncio.Queue):
-            if _queue.full():
-                self._logger.warning(
-                    "Queue full, dropping oldest data. Consider raising MAX_IN_QUEUE or MAX_OUT_QUEUE see https://pytak.rtfd.io/"
-                )
-                await _queue.get()
-            await _queue.put(data)
-        else:
-            if _queue.full():
-                self._logger.warning(
-                    "Queue full, dropping oldest data. Consider raising MAX_IN_QUEUE or MAX_OUT_QUEUE see https://pytak.rtfd.io/"
-                )
-                _queue.get_nowait()
-            _queue.put_nowait(data)
 
 
 class CLITool:
@@ -339,8 +276,8 @@ class CLITool:
         self.queues[i_config.name] = {"tx_queue": tx_queue, "rx_queue": rx_queue}
 
         reader, writer = await pytak.protocol_factory(i_config)
-        write_worker = pytak.TXWorker(tx_queue, i_config, writer)
-        read_worker = pytak.RXWorker(rx_queue, i_config, reader)
+        write_worker = pytak.TXWorker(i_config, writer)
+        read_worker = pytak.RXWorker(i_config, reader)
         self.add_task(write_worker)
         self.add_task(read_worker)
 
@@ -351,8 +288,8 @@ class CLITool:
         """
         # Create our TX & RX Protocol Worker
         reader, writer = await pytak.protocol_factory(self.config)
-        write_worker = pytak.TXWorker(self.tx_queue, self.config, writer)
-        read_worker = pytak.RXWorker(self.rx_queue, self.config, reader)
+        write_worker = pytak.TXWorker(self.config, writer)
+        read_worker = pytak.RXWorker(self.config, reader)
         self.add_task(write_worker)
         self.add_task(read_worker)
 
