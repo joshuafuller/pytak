@@ -378,22 +378,24 @@ async def txworker_factory(
 
     :param cot_url: URL to COT Destination.
     :param event_queue: asyncio.Queue worker to get events from.
-    :return: EventWorker or asyncio Protocol
+    :return: TXWorker instance
     """
     _, writer = await protocol_factory(config)
+    # Ensure the TXWorker is initialized with any new streaming parameters
     return pytak.TXWorker(queue, config, writer)
 
 
 async def rxworker_factory(
     queue: asyncio.Queue, config: SectionProxy
 ) -> pytak.RXWorker:
-    """Create a PyTAK TXWorker based on URL parameters.
+    """Create a PyTAK RXWorker based on URL parameters.
 
     :param cot_url: URL to COT Destination.
     :param event_queue: asyncio.Queue worker to get events from.
-    :return: EventWorker or asyncio Protocol
+    :return: RXWorker instance
     """
     reader, _ = await protocol_factory(config)
+    # Ensure the RXWorker is initialized with any new streaming parameters
     return pytak.RXWorker(queue, config, reader)
 
 

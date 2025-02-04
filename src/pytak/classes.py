@@ -203,28 +203,29 @@ class RXWorker(Worker):
 
     async def readcot(self):
         """Read CoT from the wire until we hit an event boundary."""
-        cot = None
         try:
-            if hasattr(self.reader, "readuntil"):
-                cot = await self.reader.readuntil("</event>".encode("UTF-8"))
-            elif hasattr(self.reader, "recv"):
-                cot, _ = await self.reader.recv()
+            while True:
+                if hasattr(self.reader, "readuntil"):
+                    cot = await self.reader.readuntil("</event>".encode("UTF-8"))
+                elif hasattr(self.reader, "recv"):
+                    cot, _ = await self.reader.recv()
 
-            if self.use_protobuf:
-                tak_v1 = takproto.parse_proto(cot)
-                if tak_v1 != -1:
-                    cot = tak_v1  # .SerializeToString()
-            return cot
+                if self.use_protobuf:
+                    tak_v1 = takproto.parse_proto(cot)
+                    if tak_v1 != -1:
+                        cot = tak_v1
+
+                yield cot
         except asyncio.IncompleteReadError:
-            return None
+            return
 
     async def run_once(self) -> None:
         """Run this worker once."""
         if self.reader:
-            data: bytes = await self.readcot()
-            if data:
-                self._logger.debug("RX data: %s", data)
-                self.queue.put_nowait(data)
+            async for data in self.readcot():
+                if data:
+                    self._logger.debug("RX data: %s", data)
+                    self.queue.put_nowait(data)
 
     async def run(self, _=-1) -> None:
         """Run this worker."""
@@ -266,6 +267,10 @@ class QueueWorker(Worker):
     ) -> None:
         """Put Data onto the Queue."""
         _queue = queue_arg or self.queue
+        if _queue is None:
+            self._logger.warning("Queue is None, skipping put_queue operation.")
+            return
+
         self._logger.debug("Queue size=%s", _queue.qsize())
         if isinstance(_queue, asyncio.Queue):
             if _queue.full():
@@ -296,30 +301,11 @@ class CLITool:
         _logger.propagate = False
     logging.getLogger("asyncio").setLevel(pytak.LOG_LEVEL)
 
-    def __init__(
-        self,
-        config: Union[ConfigParser, SectionProxy],
-        tx_queue: Union[asyncio.Queue, mp.Queue, None] = None,
-        rx_queue: Union[asyncio.Queue, mp.Queue, None] = None,
-    ) -> None:
+    def __init__(self, config: Union[ConfigParser, SectionProxy]) -> None:
         """Initialize CLITool instance."""
         self.tasks: Set = set()
         self.running_tasks: Set = set()
         self._config = config
-        self.queues: dict = {}
-
-        self.max_in_queue = int(
-            self._config.get("MAX_IN_QUEUE") or pytak.DEFAULT_MAX_IN_QUEUE
-        )
-        self.max_out_queue = int(
-            self._config.get("MAX_OUT_QUEUE") or pytak.DEFAULT_MAX_OUT_QUEUE
-        )
-        self.tx_queue: Union[asyncio.Queue, mp.Queue] = tx_queue or asyncio.Queue(
-            self.max_out_queue
-        )
-        self.rx_queue: Union[asyncio.Queue, mp.Queue] = rx_queue or asyncio.Queue(
-            self.max_in_queue
-        )
 
         if isinstance(self._config, SectionProxy) and bool(self._config.get("DEBUG")):
             for handler in self._logger.handlers:
