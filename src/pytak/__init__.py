@@ -52,7 +52,6 @@ from .classes import (  # NOQA
     Worker,
     TXWorker,
     RXWorker,
-    QueueWorker,
     CLITool,
     SimpleCOTEvent,
     COTEvent,
