@@ -8,8 +8,8 @@ copyright: Copyright Sensors & Signals LLC https://www.snstac.com/
 
 theme:
   name: material
-  logo: media/pytak_logo-256x264.png
-  favicon: media/pytak_logo-256x264.png
+  logo: media/pytak_logo.png
+  favicon: media/pytak_logo.png
   features:
     - navigation.tabs
     - navigation.sections
