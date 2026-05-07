@@ -8,6 +8,9 @@ authors = [{name = "Greg Albrecht", email = "oss@undef.net"}]
 dynamic = ["version", "description", "optional-dependencies", "readme", 
   "requires-python", "license", "maintainers", "keywords", "classifiers"]
 
+[project.scripts]
+pytak = "pytak.cli_main:main"
+
 [tool.pytest.ini_options]
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"
