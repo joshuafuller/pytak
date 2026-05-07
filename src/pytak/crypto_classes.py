@@ -77,7 +77,7 @@ class CertificateEnrollment:
         if not USE_AIOHTTP:
             raise ValueError(
                 "The 'aiohttp' package is required but not installed. "
-                "Install it with: python3 -m pip install pytak[with_aiohttp]"
+                "Install it with: python3 -m pip install pytak[with-aiohttp]"
             )
 
         self.logger = logging.getLogger(__name__)
