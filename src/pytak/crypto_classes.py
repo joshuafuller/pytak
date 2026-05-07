@@ -35,7 +35,7 @@ try:
 except ImportError:
     warnings.warn(
         "The 'cryptography' package is required but not installed. "
-        "Install it with: python3 -m pip install pytak[with_crypto]"
+        "Install it with: python3 -m pip install pytak[with-crypto]"
     )
 
 USE_AIOHTTP = False
@@ -46,7 +46,7 @@ try:
 except ImportError:
     warnings.warn(
         "The 'aiohttp' package is required but not installed. "
-        "Install it with: python3 -m pip install pytak[with_aiohttp]"
+        "Install it with: python3 -m pip install pytak[with-aiohttp]"
     )
 
 

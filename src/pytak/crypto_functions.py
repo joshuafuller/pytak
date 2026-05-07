@@ -27,7 +27,7 @@ from typing import Union,Tuple
 
 INSTALL_MSG = (
     "The 'cryptography' package is required but not installed. "
-    "Install it with: python3 -m pip install pytak[with_crypto]"
+    "Install it with: python3 -m pip install pytak[with-crypto]"
 )
 
 # Check if cryptography is installed
