@@ -206,7 +206,7 @@ async def _marti_session(config):
     except ImportError as exc:
         raise ImportError(
             "Marti HTTP transport requires aiohttp. "
-            "Install with: pip install pytak[with_aiohttp]"
+            "Install with: python3 -m pip install pytak[with-aiohttp]"
         ) from exc
 
     cot_url = get_cot_url(config)
@@ -284,10 +284,17 @@ async def ws_factory(
 
     ssl_ctx: Any = None
     if use_tls:
-        try:
-            ssl_ctx = get_ssl_ctx(get_tls_config(config))
-        except Exception:
-            ssl_ctx = False  # fall back to unverified TLS
+        tls_config = get_tls_config(config)
+        has_cert = bool(tls_config.get("PYTAK_TLS_CLIENT_CERT"))
+        if has_cert:
+            ssl_ctx = get_ssl_ctx(tls_config)
+        else:
+            # No client cert — connect with server-cert verification disabled
+            # (TAK servers routinely use self-signed certs)
+            import ssl as _ssl
+            ssl_ctx = _ssl.create_default_context()
+            ssl_ctx.check_hostname = False
+            ssl_ctx.verify_mode = _ssl.CERT_NONE
 
     raw_url = config.get("COT_URL", "")
     session = aiohttp.ClientSession()

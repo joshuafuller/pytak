@@ -177,8 +177,8 @@ async def _resolve_tak_url(raw_url: str, cfg: dict) -> None:
     except ImportError as exc:
         print(
             "[pytak] ERROR: tak:// enrollment requires "
-            "pytak[with_aiohttp,with_crypto].\n"
-            f"        pip install pytak[with_aiohttp,with_crypto]\n"
+            "pytak[with-aiohttp,with-crypto].\n"
+            f"        python3 -m pip install pytak[with-aiohttp,with-crypto]\n"
             f"        {exc}",
             file=sys.stderr,
         )
