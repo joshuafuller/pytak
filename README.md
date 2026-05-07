@@ -1,4 +1,4 @@
-![PyTAK Logo.](https://raw.githubusercontent.com/snstac/pytak/main/docs/media/pytak_logo.png)
+<img src="https://raw.githubusercontent.com/snstac/pytak/main/docs/media/pytak_logo.png" alt="PyTAK Logo" width="200">
 
 # Python Team Awareness Kit (PyTAK)
 
