@@ -259,6 +259,49 @@ async def marti_rxworker_factory(
     )
 
 
+async def ws_factory(
+    tx_queue: asyncio.Queue, rx_queue: asyncio.Queue, config: SectionProxy
+) -> Tuple["pytak.WSTXWorker", "pytak.WSRXWorker"]:
+    """Create a WSTXWorker and WSRXWorker for ws:// or wss:// connections.
+
+    Both workers share a single persistent WebSocket connection.  The TX
+    worker encodes CoT XML as TAK Protocol v1 Protobuf (STREAM) before
+    sending; the RX worker decodes incoming binary frames back to CoT bytes.
+
+    Requires ``pytak[with_aiohttp]``.  TAK Protocol v1 encoding/decoding also
+    requires ``pytak[with_takproto]`` (falls back to raw bytes if absent).
+    """
+    try:
+        import aiohttp
+    except ImportError as exc:
+        raise ImportError(
+            "WebSocket transport requires aiohttp. "
+            "Install with: python3 -m pip install pytak[with-aiohttp]"
+        ) from exc
+
+    cot_url = get_cot_url(config)
+    use_tls = cot_url.scheme.lower() == "wss"
+
+    ssl_ctx: Any = None
+    if use_tls:
+        try:
+            ssl_ctx = get_ssl_ctx(get_tls_config(config))
+        except Exception:
+            ssl_ctx = False  # fall back to unverified TLS
+
+    raw_url = config.get("COT_URL", "")
+    session = aiohttp.ClientSession()
+    try:
+        ws = await session.ws_connect(raw_url, ssl=ssl_ctx)
+    except Exception:
+        await session.close()
+        raise
+
+    tx_worker = pytak.WSTXWorker(tx_queue, config, ws, session)
+    rx_worker = pytak.WSRXWorker(rx_queue, config, ws, session)
+    return tx_worker, rx_worker
+
+
 def get_cot_url(config) -> ParseResult:
     """Verify and parse a raw COT_URL."""
     raw_cot_url: str = config.get("COT_URL", pytak.DEFAULT_COT_URL)

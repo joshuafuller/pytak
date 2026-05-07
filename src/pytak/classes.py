@@ -51,6 +51,11 @@ try:
 except ImportError:
     takproto = None
 
+try:
+    import aiohttp as _aiohttp  # type: ignore
+except ImportError:
+    _aiohttp = None
+
 
 # Optimized: Shared logger configuration to avoid duplication
 def _setup_logger(logger: logging.Logger, level: int = None) -> logging.Logger:
@@ -363,6 +368,98 @@ class MartiRXWorker(Worker):
             await asyncio.sleep(self._poll_interval)
 
 
+class WSTXWorker(Worker):
+    """Transmit CoT events to a TAK Server via WebSocket (ws:// or wss://).
+
+    Encodes CoT XML as TAK Protocol v1 Protobuf (STREAM variant) before
+    sending as a binary WebSocket frame.  Falls back to raw bytes if
+    ``takproto`` is not installed, which is useful for custom WS servers
+    that accept plain XML.
+
+    Create via ``pytak.ws_factory()``.
+    """
+
+    def __init__(
+        self,
+        queue: asyncio.Queue,
+        config,
+        ws,
+        session=None,
+    ) -> None:
+        super().__init__(queue, config)
+        self._ws = ws
+        self._session = session
+
+    async def handle_data(self, data: bytes) -> None:
+        if not data:
+            return
+        if takproto is not None:
+            try:
+                data = takproto.xml2proto(data, takproto.TAKProtoVer.STREAM)
+            except Exception as exc:
+                self._logger.warning("WS TX: Protobuf encode failed, sending raw: %s", exc)
+        try:
+            await self._ws.send_bytes(data)
+        except Exception as exc:
+            self._logger.error("WS TX send error: %s", exc)
+
+    async def close(self) -> None:
+        try:
+            await self._ws.close()
+        except Exception:
+            pass
+        if self._session:
+            await self._session.close()
+
+
+class WSRXWorker(Worker):
+    """Receive CoT events from a TAK Server via WebSocket (ws:// or wss://).
+
+    Reads binary WebSocket frames, decodes TAK Protocol v1 Protobuf to CoT
+    XML bytes, and puts each event onto the rx queue.
+
+    Create via ``pytak.ws_factory()``.
+    """
+
+    def __init__(
+        self,
+        queue: asyncio.Queue,
+        config,
+        ws,
+        session=None,
+    ) -> None:
+        super().__init__(queue, config)
+        self._ws = ws
+        self._session = session
+
+    async def handle_data(self, data: bytes) -> None:
+        pass  # data flows directly to queue in run_once
+
+    async def run_once(self) -> None:
+        if _aiohttp is None:
+            return
+        msg = await self._ws.receive()
+        if msg.type == _aiohttp.WSMsgType.BINARY:
+            payload: Optional[bytes] = msg.data
+            if takproto is not None:
+                decoded = takproto.parse_proto(payload)
+                if decoded and decoded != -1:
+                    payload = decoded if isinstance(decoded, bytes) else str(decoded).encode()
+                else:
+                    payload = None
+            if payload:
+                self.queue.put_nowait(payload)
+        elif msg.type in (_aiohttp.WSMsgType.CLOSE, _aiohttp.WSMsgType.CLOSED):
+            self._logger.warning("WebSocket closed by server")
+        elif msg.type == _aiohttp.WSMsgType.ERROR:
+            self._logger.error("WebSocket error: %s", self._ws.exception())
+
+    async def run(self, _=-1) -> None:
+        self._logger.info("Running: %s", self.__class__.__name__)
+        while True:
+            await self.run_once()
+
+
 class QueueWorker(Worker):
     """Read non-CoT Messages from an async network client.
 
@@ -410,9 +507,10 @@ class QueueWorker(Worker):
 async def _make_workers(tx_queue, rx_queue, config):
     """Return (write_worker, read_worker) for the given config.
 
-    Dispatches to Marti HTTP workers when ``COT_URL`` uses the ``marti://``
-    or ``marti+http://`` scheme; otherwise falls back to the standard
-    socket-based TXWorker / RXWorker pair.
+    Dispatches to the appropriate worker pair based on the ``COT_URL`` scheme:
+    - ``marti://`` / ``marti+http://`` → Marti REST API workers
+    - ``ws://`` / ``wss://`` → WebSocket workers
+    - everything else → standard socket TXWorker / RXWorker
     """
     cot_url_str = config.get("COT_URL", "")
     scheme = cot_url_str.split("://")[0].lower() if "://" in cot_url_str else ""
@@ -420,6 +518,8 @@ async def _make_workers(tx_queue, rx_queue, config):
     if scheme in ("marti", "marti+http"):
         write_worker = await pytak.marti_txworker_factory(tx_queue, config)
         read_worker = await pytak.marti_rxworker_factory(rx_queue, config)
+    elif scheme in ("ws", "wss"):
+        write_worker, read_worker = await pytak.ws_factory(tx_queue, rx_queue, config)
     else:
         reader, writer = await pytak.protocol_factory(config)
         write_worker = pytak.TXWorker(tx_queue, config, writer)
