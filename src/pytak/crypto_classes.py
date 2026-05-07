@@ -35,7 +35,7 @@ try:
 except ImportError:
     warnings.warn(
         "The 'cryptography' package is required but not installed. "
-        "Install it with: pip install pytak[with_crypto]"
+        "Install it with: python3 -m pip install pytak[with_crypto]"
     )
 
 USE_AIOHTTP = False
@@ -46,7 +46,7 @@ try:
 except ImportError:
     warnings.warn(
         "The 'aiohttp' package is required but not installed. "
-        "Install it with: pip install pytak[with_aiohttp]"
+        "Install it with: python3 -m pip install pytak[with_aiohttp]"
     )
 
 
@@ -77,7 +77,7 @@ class CertificateEnrollment:
         if not USE_AIOHTTP:
             raise ValueError(
                 "The 'aiohttp' package is required but not installed. "
-                "Install it with: pip install pytak[with_aiohttp]"
+                "Install it with: python3 -m pip install pytak[with_aiohttp]"
             )
 
         self.logger = logging.getLogger(__name__)
