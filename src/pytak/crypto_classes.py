@@ -32,16 +32,22 @@ try:
     from cryptography.hazmat.primitives.asymmetric import rsa
     from cryptography.hazmat.primitives.serialization import pkcs12
     USE_CRYPTOGRAPHY = True
-except ImportError as exc:
-    warnings.warn(str(exc))
+except ImportError:
+    warnings.warn(
+        "The 'cryptography' package is required but not installed. "
+        "Install it with: pip install pytak[with_crypto]"
+    )
 
 USE_AIOHTTP = False
 try:
     import aiohttp
     from aiohttp import BasicAuth, ClientTimeout
     USE_AIOHTTP = True
-except ImportError as exc:
-    warnings.warn(str(exc))
+except ImportError:
+    warnings.warn(
+        "The 'aiohttp' package is required but not installed. "
+        "Install it with: pip install pytak[with_aiohttp]"
+    )
 
 
 class CertificateEnrollment:
@@ -70,9 +76,8 @@ class CertificateEnrollment:
 
         if not USE_AIOHTTP:
             raise ValueError(
-                "This module requires aiohttp for asynchronous HTTP requests. "
-                "Please install it using 'pip install aiohttp'. " 
-                "See https://pytak.rtfd.io/ for more details."
+                "The 'aiohttp' package is required but not installed. "
+                "Install it with: pip install pytak[with_aiohttp]"
             )
 
         self.logger = logging.getLogger(__name__)
